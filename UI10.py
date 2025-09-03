@@ -24,11 +24,6 @@ if not os.path.exists(users_path):
 if not os.path.exists(diary_path):
     pd.DataFrame(columns=["email", "date", "disease", "note"]).to_csv(diary_path, index=False)
 
-users_df = pd.read_csv(users_path)
-diary_df = pd.read_csv(diary_path)
-
-if 'disease' not in diary_df.columns:
-    diary_df['disease'] = ""
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "email" not in st.session_state:
@@ -45,7 +40,20 @@ if "user_input" not in st.session_state:
     st.session_state.user_input = ""
 if "last_predicted_disease" not in st.session_state:
     st.session_state.last_predicted_disease = ""
-    
+
+# --- Utilities for persistence ---
+def load_users():
+    return pd.read_csv(users_path)
+
+def save_users(users_df):
+    users_df.to_csv(users_path, index=False)
+
+def load_diary():
+    return pd.read_csv(diary_path)
+
+def save_diary(diary_df):
+    diary_df.to_csv(diary_path, index=False)
+
 def predict_disease(symptom_text):
     input_vec = loaded_vectorizer.transform([symptom_text])
     prediction = loaded_model.predict(input_vec)
@@ -68,28 +76,27 @@ def get_suggestions(disease):
     return response
 
 def login(email, password):
-    global users_df
+    users_df = load_users()
     user = users_df[(users_df['email'] == email) & (users_df['password'] == password)]
     if not user.empty:
         st.session_state.logged_in = True
         st.session_state.email = email
-    
         user_data = user.iloc[0]
         st.session_state.name = user_data.get("name", "")
         st.session_state.photo_url = user_data.get("photo_url", "")
-        st.session_state.page = "chatbot"  
+        st.session_state.page = "chatbot"
         st.success("Login Successful!")
     else:
         st.warning("Invalid email or password!")
 
 def signup(email, password, name=""):
-    global users_df
+    users_df = load_users()
     if email in users_df['email'].values:
         st.warning("Email already registered!")
     else:
         new_user = pd.DataFrame([[email, password, name, ""]], columns=["email", "password", "name", "photo_url"])
         users_df = pd.concat([users_df, new_user], ignore_index=True)
-        users_df.to_csv(users_path, index=False)
+        save_users(users_df)
         st.success("Signup successful! Please login.")
 
 def logout():
@@ -167,10 +174,8 @@ def chatbot_page():
                 f'''<div style="background:#F8F8F8; padding:12px; margin:6px; border-radius:8px; max-width:600px; color:#222; border:1px solid #eee;">
                 <strong>Bot:</strong><br>{msg_html}</div>''',
                 unsafe_allow_html=True)
-
     user_input = st.text_input("Enter your symptoms:", value=st.session_state.user_input)
     st.session_state.user_input = user_input
-
     if st.button("Send"):
         if user_input.strip() == "":
             st.warning("Please enter your symptoms.")
@@ -185,15 +190,12 @@ def chatbot_page():
             st.session_state.user_input = ""
 
 def diary_page():
-    global diary_df
+    diary_df = load_diary()
     st.title("Health Diary")
     st.subheader(f"Hello, {st.session_state.name if st.session_state.name else st.session_state.email}")
-
     predicted_disease = st.session_state.get("last_predicted_disease", "")
-
     symptom_note = st.text_area("Enter your symptoms or health notes:")
     disease_input = st.text_input("Predicted Disease (from chatbot):", value=predicted_disease, disabled=True)
-
     if st.button("Add Note"):
         if symptom_note.strip():
             new_row = {
@@ -203,59 +205,50 @@ def diary_page():
                 "note": symptom_note,
             }
             diary_df = pd.concat([diary_df, pd.DataFrame([new_row])], ignore_index=True)
-            diary_df.to_csv(diary_path, index=False)
+            save_diary(diary_df)
             st.success("Symptom note added!")
-            diary_df = pd.read_csv(diary_path)
-
+            diary_df = load_diary()
     user_notes = diary_df[diary_df['email'] == st.session_state.email]
     st.subheader("Your Health Diary")
     st.table(user_notes[["date", "disease", "note"]])
 
 def profile_page():
-    global users_df
+    users_df = load_users()
     st.title("Profile Settings")
-
     new_name = st.text_input("Name", st.session_state.name)
     new_email = st.text_input("Email", st.session_state.email)
     photo_upload = st.file_uploader("Upload Profile Picture", type=["png", "jpg", "jpeg"])
-    
     current_photo = st.session_state.photo_url
     if not isinstance(current_photo, str) or not current_photo:
         current_photo = "https://cdn-icons-png.flaticon.com/512/1946/1946429.png"
     st.image(current_photo, width=150)
-    
-
     if st.button("Save"):
-    
         if new_email != st.session_state.email and new_email in users_df['email'].values:
             st.warning("Email already registered by another user.")
             return
-
         st.session_state.name = new_name
         old_email = st.session_state.email
         st.session_state.email = new_email
-
+        photo_url = st.session_state.photo_url
         if photo_upload is not None:
             photo_path = os.path.join(profile_pics_folder, f"{new_email}_photo.png")
             with open(photo_path, "wb") as f:
                 f.write(photo_upload.getbuffer())
             st.session_state.photo_url = photo_path
-
+            photo_url = photo_path
         idxs = users_df.index[users_df['email'] == old_email].tolist()
         if idxs:
             idx = idxs[0]
             users_df.at[idx, 'name'] = new_name
             users_df.at[idx, 'email'] = new_email
-            users_df.at[idx, 'photo_url'] = st.session_state.photo_url
+            users_df.at[idx, 'photo_url'] = photo_url
         else:
-            users_df = pd.concat([users_df, pd.DataFrame([[new_email, "", new_name, st.session_state.photo_url]], columns=users_df.columns)], ignore_index=True)
-
-        users_df.to_csv(users_path, index=False)
+            users_df = pd.concat([users_df, pd.DataFrame([[new_email, "", new_name, photo_url]], columns=users_df.columns)], ignore_index=True)
+        save_users(users_df)
         st.success("Profile updated!")
 
 def main():
     if not st.session_state.logged_in:
-        # Show home or login/signup pages
         if st.session_state.page == "login":
             login_page()
         elif st.session_state.page == "signup":
@@ -263,7 +256,6 @@ def main():
         else:
             home_page()
     else:
-
         page = sidebar()
         if page == "Chatbot":
             chatbot_page()
