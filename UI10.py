@@ -4,10 +4,6 @@ import pandas as pd
 from datetime import datetime
 import os
 
-
-# ----------------------------
-# Paths and folders
-# ----------------------------
 model_path = "Disease_model.pkl"
 vectorizer_path = "tfidf_vectorizer.pkl"
 dataset_path = "data.csv"
@@ -15,21 +11,14 @@ users_path = "users.csv"
 diary_path = "health_diary.csv"
 profile_pics_folder = "profile_pics"
 
-
 os.makedirs(profile_pics_folder, exist_ok=True)
 
-
-# ----------------------------
-# Load model, vectorizer, dataset
-# ----------------------------
 with open(model_path, "rb") as f:
     loaded_model = pickle.load(f)
 with open(vectorizer_path, "rb") as f:
     loaded_vectorizer = pickle.load(f)
 dataset = pd.read_csv(dataset_path)
 
-
-# Ensure CSV files exist with necessary columns
 if not os.path.exists(users_path):
     pd.DataFrame(columns=["email", "password", "name", "photo_url"]).to_csv(users_path, index=False)
 if not os.path.exists(diary_path):
@@ -43,10 +32,6 @@ diary_df = pd.read_csv(diary_path)
 if 'disease' not in diary_df.columns:
     diary_df['disease'] = ""
 
-
-# ----------------------------
-# Session State Initialization
-# ----------------------------
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 if "email" not in st.session_state:
@@ -124,10 +109,6 @@ def logout():
     st.session_state.user_input = ""
     st.session_state.last_predicted_disease = ""
 
-
-# ----------------------------
-# Pages
-# ----------------------------
 def home_page():
     st.title("Welcome to AI Health Assistant")
     st.write("Get started to predict your disease based on symptoms, track your health diary, and get recommendations.")
@@ -262,7 +243,7 @@ def profile_page():
 
 
     if st.button("Save"):
-        # Check if new_email already exists for different user
+        
         if new_email != st.session_state.email and new_email in users_df['email'].values:
             st.warning("Email already registered by another user.")
             return
@@ -305,7 +286,7 @@ def main():
         else:
             home_page()
     else:
-        # Logged-in users see sidebar then selected page
+        
         page = sidebar()
         if page == "Chatbot":
             chatbot_page()
