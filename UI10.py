@@ -200,6 +200,7 @@ def diary_page():
         if symptom_note.strip():
             new_row = {
                 "email": st.session_state.email,
+                "date": datetime.now().strftime("%Y-%m-%d"),
                 "disease": disease_input,
                 "note": symptom_note,
             }
